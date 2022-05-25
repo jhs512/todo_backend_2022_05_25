@@ -21,6 +21,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(express.json());
 
 const port = 3000;
 
@@ -105,6 +106,70 @@ app.delete("/:user_code/todos/:no", async (req, res) => {
   res.json({
     resultCode: "S-1",
     msg: `${no}번 할일을 삭제하였습니다`,
+  });
+});
+
+app.post("/:user_code/todos", async (req, res) => {
+  const { user_code } = req.params;
+
+  const { content, perform_date, is_completed = 0 } = req.body;
+
+  if (!content) {
+    res.status(400).json({
+      resultCode: "F-1",
+      msg: "content required",
+    });
+    return;
+  }
+
+  if (!perform_date) {
+    res.status(400).json({
+      resultCode: "F-1",
+      msg: "perform_date required",
+    });
+    return;
+  }
+
+  const [[lastTodoRow]] = await pool.query(
+    `
+    SELECT no
+    FROM todo
+    WHERE user_code = ?
+    ORDER BY id DESC
+    LIMIT 1
+    `,
+    [user_code]
+  );
+
+  const no = lastTodoRow?.no + 1 || 1;
+
+  const [insertTodoRs] = await pool.query(
+    `
+    INSERT INTO todo
+    SET reg_date = NOW(),
+    update_date = NOW(),
+    user_code = ?,
+    no = ?,
+    content = ?,
+    perform_date = ?,
+    is_completed = ?
+    `,
+    [user_code, no, content, perform_date, is_completed]
+  );
+
+  const [[justCreatedTodoRow]] = await pool.query(
+    `
+    SELECT *
+    FROM todo
+    WHERE id = ?
+    `,
+    [insertTodoRs.insertId]
+  );
+
+  res.json({
+    resultCode: "S-1",
+    msg: `${justCreatedTodoRow.id}번 할일을 생성하였습니다`,
+    data: justCreatedTodoRow,
   });
 });
 
